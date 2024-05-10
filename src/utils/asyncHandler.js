@@ -9,6 +9,14 @@
 //     }
 // };
 
+// const asyncHandler = (requestHandler) => {
+//     return (req, res, next) => {
+//         new Promise((resolve) => {
+//             resolve(requestHandler(req, res, next));
+//         }).catch((error) => next(error));
+//     };
+// };
+
 const asyncHandler = (requestHandler) => {
     return (req, res, next) => {
         Promise.resolve(requestHandler(req, res, next)).catch((error) =>
