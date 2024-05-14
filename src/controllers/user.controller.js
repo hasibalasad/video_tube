@@ -4,6 +4,24 @@ import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/apiResponse.js";
 
+const generateAccessAndRefereshTokens = async (userId) => {
+    try {
+        const user = await User.findById(userId);
+        const accessToken = user.generateAccessToken();
+        const refreshToken = user.generateRefreshToken();
+
+        user.refreshToken = refreshToken;
+        await user.save({ validateBeforeSave: false });
+
+        return { accessToken, refreshToken };
+    } catch (error) {
+        throw new ApiError(
+            500,
+            "Something went wrong while generating referesh and access token",
+        );
+    }
+};
+
 const registerUser = asyncHandler(async function (req, res) {
     // get user details from frontend.
     // validation: check for empty field.
@@ -69,7 +87,7 @@ const registerUser = asyncHandler(async function (req, res) {
 
     // user without password and refressToken field
     const createdUser = await User.findById(user._id).select(
-        "-password -refressToken",
+        "-password -refreshToken",
     );
 
     if (!createdUser) {
@@ -86,4 +104,64 @@ const registerUser = asyncHandler(async function (req, res) {
         );
 });
 
-export { registerUser };
+const loginUser = asyncHandler(async (req, res) => {
+    //get data from frontend
+    //check for empty field
+    // find for user
+    // compare password with found user
+    // generate access and refresh token and save refresh token in db
+    // send response
+
+    const { username, email, password } = req.body;
+
+    if (!(username || email)) {
+        throw new ApiError(400, "email and password is required");
+    }
+
+    const user = await User.findOne({
+        $or: [{ username }, { email }],
+    });
+
+    if (!user) {
+        throw new ApiError(404, "user does not exist");
+    }
+
+    const isPasswordValid = await user.isPasswordCorrect(password);
+
+    if (!isPasswordValid) {
+        throw new ApiError(401, "invalid user credentails");
+    }
+
+    // console.log(user._id.toString());
+    const tokens = await generateAccessAndRefereshTokens(user._id);
+    // console.log(tokens);
+    const { accessToken, refreshToken } = tokens;
+
+    // dont give user refresh token and password
+    const userDataTosend = await User.findById(user._id).select(
+        "-password -refreshToken",
+    );
+
+    const options = {
+        httpOnly: true,
+        secure: true,
+    };
+
+    return res
+        .status(200)
+        .cookie("accessToken", accessToken, options)
+        .cookie("refreshToken", refreshToken, options)
+        .json(
+            new ApiResponse(
+                200,
+                {
+                    user: userDataTosend,
+                    accessToken, // frontend developer might need these tokens for storage or for mobile
+                    refreshToken,
+                },
+                "User logged in Successfully",
+            ),
+        );
+});
+
+export { registerUser, loginUser };
