@@ -241,4 +241,31 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     }
 });
 
-export { registerUser, loginUser, logoutUser, refreshAccessToken };
+const changeCurrentPassword = asyncHandler(async (req, res) => {
+    const { oldPassword, newPassword } = req.body;
+
+    if (!(oldPassword && newPassword)) {
+        throw new ApiError(400, "all password field is required");
+    }
+
+    const user = await User.findById(req?.user._id);
+
+    const isPasswordValid = await user.isPasswordCorrect(oldPassword);
+    if (!isPasswordValid) {
+        throw new ApiError(400, "invalid old credentials");
+    }
+    user.password = newPassword;
+    await user.save({ saveBeforeValidate: false });
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, {}, "password changed successfully"));
+});
+
+export {
+    registerUser,
+    loginUser,
+    logoutUser,
+    refreshAccessToken,
+    changeCurrentPassword,
+};
