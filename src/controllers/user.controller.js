@@ -314,7 +314,7 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
             },
         },
         { new: true },
-    );
+    ).select("-password");
 
     return res
         .status(200)
@@ -325,7 +325,7 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
     const coverImageLocalPath = req.file?.path;
 
     if (!coverImageLocalPath) {
-        throw new ApiError(400, "Avatar file is missing");
+        throw new ApiError(400, "cover image file is missing");
     }
 
     const coverImage = await uploadOnCloudinary(coverImageLocalPath);
@@ -333,7 +333,7 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
     if (!coverImage.url) {
         throw new ApiError(
             500,
-            "error while avatar file updating on cloudinary",
+            "error while cover image file updating on cloudinary",
         );
     }
 
@@ -345,11 +345,89 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
             },
         },
         { new: true },
-    );
+    ).select("-password");
 
     return res
         .status(200)
         .json(new ApiResponse(200, user, "Cover Image updated successfully"));
+});
+
+const getUserChannelProfile = asyncHandler(async (req, res) => {
+    const { username } = req.params;
+
+    if (!username?.trim()) {
+        throw new ApiError(400, "username is missing");
+    }
+
+    const channel = await User.aggregate([
+        {
+            $match: {
+                username: username?.toLowerCase(),
+            },
+        },
+        {
+            $lookup: {
+                from: "subscriptions", // collection name
+                localField: "_id", // current user id :- ObjectId('5f9c5b5b4c5b5b4c5b5b4c5b')
+                foreignField: "channel", // channel id :- ObjectId('5f9c5b5b4c5b5b4c5b5b4c5b')
+                as: "subscribers",
+            },
+        },
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "subscriber",
+                as: "subscribeTo",
+            },
+        },
+        {
+            $addFields: {
+                subscribeCount: {
+                    $size: "$subscribers", // number of subscribers
+                },
+                channelSubscribedToCount: {
+                    $size: "$subscribeTo",
+                },
+                isSubscribed: {
+                    $cond: {
+                        if: {
+                            $in: [req.user?._id, "$subscribers.subscriber"],
+                        },
+                        then: true,
+                        else: false,
+                    },
+                },
+            },
+        },
+        {
+            $project: {
+                username: 1,
+                fullName: 1,
+                email: 1,
+                avatar: 1,
+                coverImage: 1,
+                subscribeCount: 1,
+                channelSubscribedToCount: 1,
+                isSubscribed: 1,
+            },
+        },
+    ]);
+
+    if (!channel?.length) {
+        throw new ApiError(400, "channel does not exists");
+    }
+
+    // console.log(channel);
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(
+                200,
+                channel[0],
+                "user channel fetched successfully",
+            ),
+        );
 });
 
 export {
@@ -362,4 +440,5 @@ export {
     updateAccountDetails,
     updateUserAvatar,
     updateUserCoverImage,
+    getUserChannelProfile,
 };
