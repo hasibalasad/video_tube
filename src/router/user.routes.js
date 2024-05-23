@@ -40,17 +40,17 @@ router.route("/refreshtoken").post(refreshAccessToken);
 
 router.route("/changepassword").post(verifyJWT, changeCurrentPassword);
 
-router.route("/user").post(verifyJWT, getCurrentUser);
+router.route("/currentuser").get(verifyJWT, getCurrentUser);
 
-router.route("/updateaccountdetails").post(verifyJWT, updateAccountDetails);
+router.route("/updateaccountdetails").patch(verifyJWT, updateAccountDetails);
 
 router
     .route("/updateuseravatar")
-    .post(upload.single("avatar"), verifyJWT, updateUserAvatar);
+    .patch(upload.single("avatar"), verifyJWT, updateUserAvatar);
 router
     .route("/updateusercoverimage")
-    .post(verifyJWT, upload.single("coverImage"), updateUserCoverImage);
+    .patch(verifyJWT, upload.single("coverImage"), updateUserCoverImage);
 
-router.route("/:username").post(verifyJWT, getUserChannelProfile);
+router.route("/channel/:username").get(verifyJWT, getUserChannelProfile);
 
 export default router;
