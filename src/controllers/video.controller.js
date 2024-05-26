@@ -12,8 +12,65 @@ const getAllVideos = asyncHandler(async (req, res) => {
 });
 
 const publishAVideo = asyncHandler(async (req, res) => {
+    // get video, upload to cloudinary, create video
+
+    // get video title and description
     const { title, description } = req.body;
-    // TODO: get video, upload to cloudinary, create video
+
+    // check if title is provided
+    if (!title) {
+        throw new ApiError(400, "title is required");
+    }
+
+    // get video file and thumbnail
+    const videoFile = req.files?.videoFile[0];
+    const thumbnail = req.files?.thumbnail[0];
+
+    // check if validate video file and thumbnail are provided
+    if (!(videoFile && thumbnail)) {
+        throw new ApiError(400, "Video file and thumbnail are required.");
+    }
+
+    // get video file local path
+    const videoFileLocalPath = videoFile?.path;
+
+    // check if video file local path is provided
+    if (!videoFileLocalPath) {
+        throw new ApiError(500, "video local path is missing");
+    }
+
+    // upload video on cloudinary
+    const videoCloudinaryRes = await uploadOnCloudinary(videoFileLocalPath);
+
+    // check if video cloudinary response is provided
+    if (!videoCloudinaryRes) {
+        throw new ApiError(500, "ERROR: while oploading video on cloudinary");
+    }
+    const { url, duration } = videoCloudinaryRes;
+
+    // upload thumbnail on cloudinary
+    const thumbnailCloudinaryRes = await uploadOnCloudinary(thumbnail?.path);
+    if (!thumbnailCloudinaryRes) {
+        throw new ApiError(
+            500,
+            "ERROR: while oploading thumbanail on cloudinary",
+        );
+    }
+
+    // const user = await User.findById(req?.user._id);
+
+    // create video in db
+    const video = await Video.create({
+        title,
+        description,
+        duration,
+        videoFile: url,
+        thumbnail: thumbnailCloudinaryRes?.url,
+        owner: req.user?._id,
+    });
+    return res
+        .status(200)
+        .json(new ApiResponse(200, video, "video added successfully"));
 });
 
 const getVideoById = asyncHandler(async (req, res) => {
