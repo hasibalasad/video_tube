@@ -5,6 +5,9 @@ import ApiError from "../utils/apiError.js";
 import { ApiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import extractPublicIdFromUrl from "../utils/deleteFromCloudinary.js";
+import { v2 as cloudinary } from "cloudinary";
+import deleteFromCloudinary from "../utils/deleteFromCloudinary.js";
 
 const getAllVideos = asyncHandler(async (req, res) => {
     const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query;
@@ -77,7 +80,7 @@ const getVideoById = asyncHandler(async (req, res) => {
     // get video by id
     const { videoId } = req.params;
     if (!videoId) {
-        throw new ApiError(400, "video id is not valid");
+        throw new ApiError(400, "video id is required");
     }
 
     const video = await Video.findById(videoId);
@@ -95,17 +98,96 @@ const getVideoById = asyncHandler(async (req, res) => {
 });
 
 const updateVideo = asyncHandler(async (req, res) => {
+    // update video details like title, description, thumbnail
     const { videoId } = req.params;
-    //TODO: update video details like title, description, thumbnail
+    if (!videoId) throw new ApiError(400, "video id is required");
+
+    const video = await Video.findById(videoId);
+    if (!video) throw new ApiError(401, "video not found");
+
+    const { title, description } = req.body;
+    if (title) video.title = title;
+    if (description) video.description = description;
+
+    const thumbnailLocalPath = req?.file?.path;
+
+    if (!(title || description || thumbnailLocalPath)) {
+        throw new ApiError(400, "need a field to update video");
+    }
+    if (thumbnailLocalPath) {
+        const resOfCloudinary = await uploadOnCloudinary(thumbnailLocalPath);
+        if (!resOfCloudinary)
+            throw new ApiError(
+                500,
+                "ERROR: while uploading thumbnail on cloudinary",
+            );
+        video.thumbnail = resOfCloudinary.url;
+    }
+
+    await video.save({ validateBeforeSave: false });
+    return res
+        .status(200)
+        .json(new ApiResponse(200, video, "video updated successfully"));
 });
 
 const deleteVideo = asyncHandler(async (req, res) => {
+    // delete video
     const { videoId } = req.params;
-    //TODO: delete video
+    if (!videoId) {
+        throw new ApiError(401, "video id is required");
+    }
+
+    const video = await Video.findByIdAndDelete(videoId);
+    if (!video) {
+        throw new ApiError(500, "Error while deleting the video");
+    }
+    // how to delete from cloudinary
+    if (video.videoFile) {
+        await deleteFromCloudinary(video.videoFile, "video");
+    }
+    if (video.thumbnail) {
+        await deleteFromCloudinary(video.thumbnail, "image");
+    }
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, {}, "video deleted successfully"));
 });
 
 const togglePublishStatus = asyncHandler(async (req, res) => {
     const { videoId } = req.params;
+    if (!videoId) {
+        throw new ApiError(401, "video id is required");
+    }
+
+    const video = await Video.findById(videoId).select("isPublished");
+    video.isPublished = !video.isPublished;
+    await video.save({ validateBeforeSave: false });
+
+    //another way to toggle publish status
+    // const video = await Video.findByIdAndUpdate(
+    //     videoId,
+    //     [
+    //         {
+    //             $set: {
+    //                 isPublished: {
+    //                     $not: "$isPublished",
+    //                 },
+    //             },
+    //         },
+    //     ],
+    //     {
+    //         new: true,
+    //     },
+    // ).select("isPublished");
+
+    if (!video) {
+        throw new ApiError(500, "Error while toggling the publish status");
+    }
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, video, "video publish status is updated"));
 });
 
 export {
