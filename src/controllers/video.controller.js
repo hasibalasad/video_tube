@@ -1,17 +1,58 @@
 import mongoose, { isValidObjectId } from "mongoose";
 import { Video } from "../models/video.model.js";
-import { User } from "../models/user.model.js";
 import ApiError from "../utils/apiError.js";
 import { ApiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
-import extractPublicIdFromUrl from "../utils/deleteFromCloudinary.js";
-import { v2 as cloudinary } from "cloudinary";
 import deleteFromCloudinary from "../utils/deleteFromCloudinary.js";
 
 const getAllVideos = asyncHandler(async (req, res) => {
-    const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query;
     //TODO: get all videos based on query, sort, pagination
+    // const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query;
+    // ?page=1&limit=10&sortBy=createdAt&sortType=desc
+
+    const queryObj = { ...req.query };
+    const fieldsToExclude = ["page", "limit", "sortBy", "sortType"];
+    fieldsToExclude.forEach((el) => delete queryObj[el]);
+
+    let query = Video.find(queryObj);
+
+    //  sorting query
+
+    if (req.query.sort && !req.query.sortType) {
+        query = query.sort({
+            [req.query.sortBy]: 1,
+        });
+    }
+
+    if (req.query.sortBy && req.query.sortType) {
+        query = query.sort({
+            [req.query.sortBy]: req.query.sortType,
+        });
+    }
+
+    // pagination query
+    const page = req.query.page * 1 || 1;
+    const limit = req.query.limit * 1 || 10;
+
+    // if page 3 and limit 10 then skip 20
+    const skip = (page - 1) * limit;
+    query = query.skip(skip).limit(limit); //skip method is the number of videos to be skipped
+
+    if (req.query.page) {
+        const numberOfVideo = await Video.countDocuments();
+        if (skip >= numberOfVideo) {
+            throw new ApiError(400, "Page does not exist");
+        }
+    }
+
+    // get videos
+    const videos = await query;
+
+    // send response
+    return res
+        .status(200)
+        .json(new ApiResponse(200, videos, "videos fetched successfully"));
 });
 
 const publishAVideo = asyncHandler(async (req, res) => {
