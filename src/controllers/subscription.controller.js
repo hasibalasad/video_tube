@@ -13,6 +13,91 @@ const toggleSubscription = asyncHandler(async (req, res) => {
 // controller to return subscriber list of a channel
 const getUserChannelSubscribers = asyncHandler(async (req, res) => {
     const { channelId } = req.params;
+
+    if (!channelId) {
+        throw new ApiError(400, "channel not found");
+    }
+
+    // const channelSubscribers = await User.aggregate([
+    //     {
+    //         $match: {
+    //             _id: new mongoose.Types.ObjectId(channelId),
+    //         },
+    //     },
+    //     {
+    //         $lookup: {
+    //             from: "subscriptions",
+    //             localField: "_id",
+    //             foreignField: "channel",
+    //             as: "subscribers",
+    //         },
+    //     },
+    //     {
+    //         $addFields: {
+    //             subscribers: "$subscribers.subscriber",
+    //             subscribersCount: { $size: "$subscribers" },
+    //         },
+    //     },
+    //     {
+    //         $project: {
+    //             username: 1,
+    //             subscribers: 1,
+    //             subscribersCount: 1,
+    //         },
+    //     },
+    // ]);
+
+    const channelSubscribers = await User.aggregate([
+        {
+            $match: {
+                _id: new mongoose.Types.ObjectId(channelId),
+            },
+        },
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "channel",
+                as: "subscribers",
+            },
+        },
+
+        {
+            $lookup: {
+                from: "users",
+                localField: "subscribers.subscriber",
+                foreignField: "_id",
+                as: "subscribers",
+                pipeline: [
+                    {
+                        $project: {
+                            username: 1,
+                            avatar: 1,
+                        },
+                    },
+                ],
+            },
+        },
+
+        {
+            $project: {
+                username: 1,
+                fullName: 1,
+                avatar: 1,
+                subscribers: 1,
+            },
+        },
+    ]);
+
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(
+                200,
+                channelSubscribers,
+                "subscribers fetched successfully",
+            ),
+        );
 });
 
 // controller to return channel list to which user has subscribed
